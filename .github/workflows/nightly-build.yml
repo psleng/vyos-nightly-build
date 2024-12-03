@@ -56,6 +56,7 @@ on:
 env:
   BUILD_BY: autobuild@vyos.net
   DEBIAN_MIRROR: http://deb.debian.org/debian/
+  DEBIAN_SECURITY_MIRROR: http://deb.debian.org/debian-security
   VYOS_MIRROR: https://packages.vyos.net/repositories/current/
 
 jobs:
@@ -107,6 +108,7 @@ jobs:
           --build-type release \
           --custom-package vyos-1x-smoketest \
           --debian-mirror $DEBIAN_MIRROR \
+          --debian-security-mirror $DEBIAN_SECURITY_MIRROR \
           --version ${{ steps.set_env_variables.outputs.build_version }} \
           --vyos-mirror $VYOS_MIRROR \
           generic
