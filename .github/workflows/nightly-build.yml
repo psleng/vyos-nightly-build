@@ -384,7 +384,6 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    if: ${{ success() && (inputs.SKIP_RELEASE_PUBLISHING == 'false') }}
     steps:
       - uses: actions/checkout@v4
       - name: Clone vyos-build repo
@@ -477,10 +476,6 @@ jobs:
         with:
           name: ${{ needs.build_iso.outputs.generic_image_name }}
 
-      - name: Debug artifact path
-        run: |
-          find . -type f
-
       - name: "Release publishing: publish release"
         uses: softprops/action-gh-release@v2
         with:
@@ -488,8 +483,8 @@ jobs:
           tag_name: ${{ needs.build_iso.outputs.build_version }}
           fail_on_unmatched_files: true
           files: |
-            ./${{ needs.build_iso.outputs.generic_image_iso }}
-            ./${{ needs.build_iso.outputs.generic_image_iso }}.minisig
+            vyos-build/build/${{ needs.build_iso.outputs.generic_image_iso }}
+            vyos-build/build/${{ needs.build_iso.outputs.generic_image_iso }}.minisig
 
       - uses: Nats-ji/delete-old-releases@v1.0.1
         with:
