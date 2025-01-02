@@ -32,11 +32,6 @@ on:
         required: true
         type: boolean
         default: false
-      SKIP_SNAPSHOT_S3_UPLOAD:
-        description: 'Skip snapshot upload to S3'
-        required: true
-        type: boolean
-        default: false
       SKIP_RELEASE_PUBLISHING:
         description: 'Skip release publishing'
         required: true
@@ -44,11 +39,6 @@ on:
         default: false
       SKIP_SLACK_NOTIFICATIONS:
         description: 'Skip Slack notifications'
-        required: true
-        type: boolean
-        default: false
-      SKIP_DOWNLOADS_PAGE_UPDATE:
-        description: 'Skip downloads page update'
         required: true
         type: boolean
         default: false
