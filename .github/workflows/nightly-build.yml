@@ -306,7 +306,7 @@ jobs:
       - test_encrypted_config_tpm
       - build_iso
     runs-on: ubuntu-24.04
-    if: ${{ failure() && github.ref == 'refs/heads/current' && !inputs.SKIP_SLACK_NOTIFICATIONS }}
+    if: ${{ failure() && (github.ref == 'refs/heads/current') && !inputs.SKIP_SLACK_NOTIFICATIONS }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -389,7 +389,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    if: ${{ success() && inputs.SKIP_RELEASE_PUBLISHING == 'false' && github.ref == 'refs/heads/current' }}
+    if: ${{ success() && (inputs.SKIP_RELEASE_PUBLISHING == 'false') }}
     steps:
       - uses: actions/checkout@v4
       - name: Clone vyos-build repo
