@@ -389,7 +389,13 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    if: ${{ success() && !inputs.SKIP_RELEASE_PUBLISHING && github.ref == 'refs/heads/current' }}
+    if: ${{
+      (needs.test_config_load.result == 'success' || !inputs.SKIP_SMOKETEST_CONFIG) &&
+      (needs.test_raid1_install.result == 'success' || !inputs.SKIP_SMOKETEST_RAID1) &&
+      (needs.test_smoketest_cli.result == 'success' || !inputs.SKIP_SMOKETEST_CLI) &&
+      (needs.test_interfaces_cli.result == 'success' || !inputs.SKIP_SMOKETEST_INTERFACES) &&
+      (needs.test_encrypted_config_tpm.result == 'success' || !inputs.SKIP_SMOKETEST_TPM) &&
+      (!inputs.SKIP_RELEASE_PUBLISHING) }}
     steps:
       - uses: actions/checkout@v4
       - name: Clone vyos-build repo
@@ -505,6 +511,7 @@ jobs:
   update_download_page:
     needs:
       - publish
+    if: ${{ github.ref == 'refs/heads/current' }}
     uses: vyos/community.vyos.net/.github/workflows/main.yml@production
     with:
       branch: production
