@@ -67,6 +67,8 @@ jobs:
       build_version: ${{ steps.set_env_variables.outputs.build_version }}
       TIMESTAMP: ${{ steps.set_env_variables.outputs.TIMESTAMP }}
       PREVIOUS_SUCCESS_BUILD_TIMESTAMP: ${{ steps.set_env_variables.outputs.PREVIOUS_SUCCESS_BUILD_TIMESTAMP }}
+      generic_image_iso: ${{ steps.build_generic_iso.outputs.generic_image_iso }}
+      generic_image_name: ${{ steps.build_generic_iso.outputs.generic_image_name }}
 
     steps:
       ### Initialization ###
@@ -87,9 +89,11 @@ jobs:
           echo "PREVIOUS_SUCCESS_BUILD_TIMESTAMP=$(cat version.json | jq -r '.[0].timestamp')" >> $GITHUB_OUTPUT
           echo "BUILD_BY=$BUILD_BY" >> $GITHUB_OUTPUT
 
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
+          # Clone to sub-path required for minisign binary shipped in this repo
+          # This might change with future Debian versions when they ship minisign
           repository: vyos/vyos-build
           path: vyos-build
 
@@ -98,31 +102,33 @@ jobs:
         run: |
           cd vyos-build
           sudo --preserve-env ./build-vyos-image \
-          --architecture amd64 \
-          --build-by $BUILD_BY \
-          --build-type release \
-          --custom-package vyos-1x-smoketest \
-          --debian-mirror $DEBIAN_MIRROR \
-          --debian-security-mirror $DEBIAN_SECURITY_MIRROR \
-          --version ${{ steps.set_env_variables.outputs.build_version }} \
-          --vyos-mirror $VYOS_MIRROR \
-          generic
-          # move artifact one level up for minisign
-          mv build/vyos-${{ steps.set_env_variables.outputs.build_version }}-generic-amd64.iso ..
-
-      - name: Sign generic ISO image
-        shell: bash
-        run: |
-          echo "${{ secrets.minisign_private_key }}" > /tmp/minisign.key
-          echo ${{ secrets.minisign_password }} | $GITHUB_WORKSPACE/bin/minisign -s /tmp/minisign.key -Sm vyos-${{ steps.set_env_variables.outputs.build_version }}-generic-amd64.iso
+            --architecture amd64 \
+            --build-by $BUILD_BY \
+            --build-type release \
+            --custom-package vyos-1x-smoketest \
+            --debian-mirror $DEBIAN_MIRROR \
+            --debian-security-mirror $DEBIAN_SECURITY_MIRROR \
+            --version ${{ steps.set_env_variables.outputs.build_version }} \
+            --vyos-mirror $VYOS_MIRROR \
+            generic
+          cd build
+          GENERIC_IMAGE_NAME=$(jq --raw-output .artifacts[0] manifest.json | sed -e 's/.iso//')
+          GENERIC_IMAGE_ISO=$(jq --raw-output .artifacts[0] manifest.json)
+          echo "generic_image_iso=${GENERIC_IMAGE_ISO}" >> $GITHUB_OUTPUT
+          echo "generic_image_name=${GENERIC_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          # Sign build artifact
           echo "${{ secrets.minisign_public_key }}" > /tmp/minisign.pub
-          $GITHUB_WORKSPACE/bin/minisign -Vm vyos-${{ steps.set_env_variables.outputs.build_version }}-generic-amd64.iso -x vyos-${{ steps.set_env_variables.outputs.build_version }}-generic-amd64.iso.minisig -p /tmp/minisign.pub
-          rm /tmp/minisign.key /tmp/minisign.pub
+          echo "${{ secrets.minisign_private_key }}" > /tmp/minisign.key
+          echo "${{ secrets.minisign_password }}" | $GITHUB_WORKSPACE/bin/minisign -s /tmp/minisign.key -Sm ${GENERIC_IMAGE_ISO}
+          $GITHUB_WORKSPACE/bin/minisign -Vm ${GENERIC_IMAGE_ISO} -x ${GENERIC_IMAGE_ISO}.minisig -p /tmp/minisign.pub
+          rm -f /tmp/minisign.key /tmp/minisign.pub
 
       - uses: actions/upload-artifact@v4
         with:
-          name: vyos-${{ steps.set_env_variables.outputs.build_version }}-generic-amd64
-          path: vyos-${{ steps.set_env_variables.outputs.build_version }}-*
+          name: ${{ steps.build_generic_iso.outputs.generic_image_name }}
+          path: |
+            **/${{ steps.build_generic_iso.outputs.generic_image_iso }}
+            **/${{ steps.build_generic_iso.outputs.generic_image_iso }}.minisig
           retention-days: 30
           if-no-files-found: error
 
@@ -135,20 +141,22 @@ jobs:
       options: --sysctl net.ipv6.conf.lo.disable_ipv6=0 --privileged
     steps:
       # We need the test script from vyos-build repo
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
       - uses: actions/download-artifact@v4
         with:
-          name: vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64
+          name: ${{ needs.build_iso.outputs.generic_image_name }}
           path: build
       - name: VyOS CLI smoketests (no interfaces)
         id: test
         shell: bash
         run: |
           set -e
-          ln -s vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso build/live-image-amd64.hybrid.iso
+          # extract ISO image from artifact
+          find build -type f -exec cp {} build \;
+          ln -s ${{ needs.build_iso.outputs.generic_image_iso }} build/live-image-amd64.hybrid.iso
           sudo make test-no-interfaces | tee smoketest_make_test_no_interfaces.log
       - uses: actions/upload-artifact@v4
         with:
@@ -166,20 +174,22 @@ jobs:
       options: --sysctl net.ipv6.conf.lo.disable_ipv6=0 --privileged
     steps:
       # We need the test script from vyos-build repo
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
       - uses: actions/download-artifact@v4
         with:
-          name: vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64
+          name: ${{ needs.build_iso.outputs.generic_image_name }}
           path: build
       - name: VyOS CLI smoketests (interfaces only)
         id: test
         shell: bash
         run: |
           set -e
-          ln -s vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso build/live-image-amd64.hybrid.iso
+          # extract ISO image from artifact
+          find build -type f -exec cp {} build \;
+          ln -s ${{ needs.build_iso.outputs.generic_image_iso }} build/live-image-amd64.hybrid.iso
           sudo make test-interfaces | tee smoketest_make_test_interfaces.log
       - uses: actions/upload-artifact@v4
         with:
@@ -197,20 +207,22 @@ jobs:
       options: --sysctl net.ipv6.conf.lo.disable_ipv6=0 --privileged
     steps:
       # We need the test script from vyos-build repo
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
       - uses: actions/download-artifact@v4
         with:
-          name: vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64
+          name: ${{ needs.build_iso.outputs.generic_image_name }}
           path: build
       - name: VyOS config load tests
         id: test
         shell: bash
         run: |
           set -e
-          ln -s vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso build/live-image-amd64.hybrid.iso
+          # extract ISO image from artifact
+          find build -type f -exec cp {} build \;
+          ln -s ${{ needs.build_iso.outputs.generic_image_iso }} build/live-image-amd64.hybrid.iso
           sudo make testc | tee smoketest_make_testc.log
       - uses: actions/upload-artifact@v4
         with:
@@ -228,20 +240,22 @@ jobs:
       options: --sysctl net.ipv6.conf.lo.disable_ipv6=0 --privileged
     steps:
       # We need the test script from vyos-build repo
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
       - uses: actions/download-artifact@v4
         with:
-          name: vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64
+          name: ${{ needs.build_iso.outputs.generic_image_name }}
           path: build
       - name: VyOS RAID1 installation tests
         id: test
         shell: bash
         run: |
           set -e
-          ln -s vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso build/live-image-amd64.hybrid.iso
+          # extract ISO image from artifact
+          find build -type f -exec cp {} build \;
+          ln -s ${{ needs.build_iso.outputs.generic_image_iso }} build/live-image-amd64.hybrid.iso
           sudo make testraid | tee smoketest_make_testraid.log
       - uses: actions/upload-artifact@v4
         with:
@@ -259,20 +273,22 @@ jobs:
       options: --sysctl net.ipv6.conf.lo.disable_ipv6=0 --privileged
     steps:
       # We need the test script from vyos-build repo
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
       - uses: actions/download-artifact@v4
         with:
-          name: vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64
+          name: ${{ needs.build_iso.outputs.generic_image_name }}
           path: build
       - name: VyOS TPM encryption tests
         id: test
         shell: bash
         run: |
           set -e
-          ln -s vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso build/live-image-amd64.hybrid.iso
+          # extract ISO image from artifact
+          find build -type f -exec cp {} build \;
+          ln -s ${{ needs.build_iso.outputs.generic_image_iso }} build/live-image-amd64.hybrid.iso
           sudo make testtpm | tee smoketest_make_testtpm.log
       - uses: actions/upload-artifact@v4
         with:
@@ -290,7 +306,7 @@ jobs:
       - test_encrypted_config_tpm
       - build_iso
     runs-on: ubuntu-24.04
-    if: failure()
+    if: ${{ failure() && github.ref == 'refs/heads/current' && !inputs.SKIP_SLACK_NOTIFICATIONS }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -373,10 +389,10 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
-    if: ${{ success() && !inputs.SKIP_RELEASE_PUBLISHING }}
+    if: ${{ success() && !inputs.SKIP_RELEASE_PUBLISHING && github.ref == 'refs/heads/current' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Clone vyos-build source code
+      - name: Clone vyos-build repo
         uses: actions/checkout@v4
         with:
           repository: vyos/vyos-build
@@ -443,7 +459,7 @@ jobs:
           json: |
             [
               {
-                "url": "https://github.com/vyos/vyos-nightly-build/releases/download/${{ needs.build_iso.outputs.build_version }}/vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso",
+                "url": "https://github.com/vyos/vyos-nightly-build/releases/download/${{ needs.build_iso.outputs.build_version }}/${{ needs.build_iso.outputs.generic_image_iso }}",
                 "version": "${{ needs.build_iso.outputs.build_version }}",
                 "timestamp": "${{ needs.build_iso.outputs.TIMESTAMP }}"
               }
@@ -464,7 +480,11 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64
+          name: ${{ needs.build_iso.outputs.generic_image_name }}
+
+      - name: Debug artifact path
+        run: |
+          find . -type f
 
       - name: "Release publishing: publish release"
         uses: softprops/action-gh-release@v2
@@ -473,8 +493,8 @@ jobs:
           tag_name: ${{ needs.build_iso.outputs.build_version }}
           fail_on_unmatched_files: true
           files: |
-            ./vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso
-            ./vyos-${{ needs.build_iso.outputs.build_version }}-generic-amd64.iso.minisig
+            ./${{ needs.build_iso.outputs.generic_image_iso }}
+            ./${{ needs.build_iso.outputs.generic_image_iso }}.minisig
 
       - uses: Nats-ji/delete-old-releases@v1.0.1
         with:
@@ -483,7 +503,6 @@ jobs:
           keep-old-minor-releases: false
 
   update_download_page:
-    if: ${{ !inputs.SKIP_RELEASE_PUBLISHING }}
     needs:
       - publish
     uses: vyos/community.vyos.net/.github/workflows/main.yml@production
