@@ -384,6 +384,7 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+    if: github.ref_name == 'current'
     steps:
       - uses: actions/checkout@v4
       - name: Clone vyos-build repo
