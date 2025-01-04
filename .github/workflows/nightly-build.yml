@@ -122,6 +122,7 @@ jobs:
         with:
           name: ${{ steps.build_generic_iso.outputs.generic_image_name }}
           path: |
+            **/manifest.json
             **/${{ steps.build_generic_iso.outputs.generic_image_iso }}
             **/${{ steps.build_generic_iso.outputs.generic_image_iso }}.minisig
           retention-days: 30
