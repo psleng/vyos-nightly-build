@@ -180,6 +180,7 @@ jobs:
             --architecture amd64 \
             --build-by $BUILD_BY \
             --build-type release \
+            --custom-package vyos-1x-smoketest \
             --debian-mirror $DEBIAN_MIRROR \
             --debian-security-mirror $DEBIAN_SECURITY_MIRROR \
             --version ${{ steps.set_env_variables.outputs.build_version }} \
@@ -263,6 +264,7 @@ jobs:
             --architecture amd64 \
             --build-by $BUILD_BY \
             --build-type release \
+            --custom-package vyos-1x-smoketest \
             --debian-mirror $DEBIAN_MIRROR \
             --debian-security-mirror $DEBIAN_SECURITY_MIRROR \
             --version ${{ steps.set_env_variables.outputs.build_version }} \
@@ -418,7 +420,7 @@ jobs:
           # extract ISO image from artifact
           find build -type f -exec cp {} build \;
           ln -s ${{ needs.build_proxmox_iso.outputs.proxmox_image_iso }} build/live-image-amd64.hybrid.iso
-          sudo make testc | tee smoketest_make_testc.log
+          sudo make testc | tee smoketest_proxmox_make_testc.log
       - uses: actions/upload-artifact@v4
         with:
           name: smoketest_proxmox_make_testc
@@ -451,7 +453,7 @@ jobs:
           # extract ISO image from artifact
           find build -type f -exec cp {} build \;
           ln -s ${{ needs.build_vmware_vsphere_iso.outputs.vmware_image_iso }} build/live-image-amd64.hybrid.iso
-          sudo make testc | tee smoketest_make_testc.log
+          sudo make testc | tee smoketest_vmware_make_testc.log
       - uses: actions/upload-artifact@v4
         with:
           name: smoketest_vmware_make_testc
