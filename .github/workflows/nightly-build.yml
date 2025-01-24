@@ -52,6 +52,7 @@ env:
 jobs:
   build_generic_iso:
     runs-on: ubuntu-24.04
+    if: github.repository == 'vyos/vyos-nightly-build'
     permissions:
       contents: write
     container:
@@ -130,6 +131,7 @@ jobs:
 
   build_proxmox_iso:
     runs-on: self-hosted
+    if: github.repository == 'vyos/vyos-nightly-build'
     permissions:
       contents: write
     container:
@@ -214,6 +216,7 @@ jobs:
 
   build_vmware_vsphere_iso:
     runs-on: self-hosted
+    if: github.repository == 'vyos/vyos-nightly-build'
     permissions:
       contents: write
     container:
