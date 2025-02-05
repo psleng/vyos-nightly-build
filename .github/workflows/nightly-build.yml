@@ -108,24 +108,27 @@ jobs:
             --vyos-mirror $VYOS_MIRROR \
             generic
           cd build
+          # Determine image name and iso file
           GENERIC_IMAGE_NAME=$(jq --raw-output .artifacts[0] manifest.json | sed -e 's/.iso//')
           GENERIC_IMAGE_ISO=$(jq --raw-output .artifacts[0] manifest.json)
           echo "generic_image_name=${GENERIC_IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "generic_image_iso=${GENERIC_IMAGE_ISO}" >> $GITHUB_OUTPUT
-          # Sign build artifact
+          # Cryptographically sign the image
           echo "${{ secrets.minisign_public_key }}" > /tmp/minisign.pub
           echo "${{ secrets.minisign_private_key }}" > /tmp/minisign.key
           echo "${{ secrets.minisign_password }}" | $GITHUB_WORKSPACE/bin/minisign -s /tmp/minisign.key -Sm ${GENERIC_IMAGE_ISO}
           $GITHUB_WORKSPACE/bin/minisign -Vm ${GENERIC_IMAGE_ISO} -x ${GENERIC_IMAGE_ISO}.minisig -p /tmp/minisign.pub
           rm -f /tmp/minisign.key /tmp/minisign.pub
+          # Move artifacts to workspace to avoid nested path in artifact archive
+          mv manifest.json ${GENERIC_IMAGE_ISO} ${GENERIC_IMAGE_ISO}.minisig $GITHUB_WORKSPACE
 
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.build_generic_iso.outputs.generic_image_name }}
           path: |
-            **/manifest.json
-            **/${{ steps.build_generic_iso.outputs.generic_image_iso }}
-            **/${{ steps.build_generic_iso.outputs.generic_image_iso }}.minisig
+            manifest.json
+            ${{ steps.build_generic_iso.outputs.generic_image_iso }}
+            ${{ steps.build_generic_iso.outputs.generic_image_iso }}.minisig
           retention-days: 15
           if-no-files-found: error
 
@@ -319,7 +322,6 @@ jobs:
               cat $logfile | grep 'ERROR -' >> ${{ github.workspace }}/smoketest_filtered.log || true
               cat $logfile | grep 'Error:' -A12 >> ${{ github.workspace }}/smoketest_filtered.log || true
           done
-          ls -al
 
       - name: "Slack notification: send to channel"
         id: send_a_slack_failure_notification
@@ -486,8 +488,8 @@ jobs:
           tag_name: ${{ needs.build_generic_iso.outputs.build_version }}
           fail_on_unmatched_files: true
           files: |
-            vyos-build/build/${{ needs.build_generic_iso.outputs.generic_image_iso }}
-            vyos-build/build/${{ needs.build_generic_iso.outputs.generic_image_iso }}.minisig
+            ${{ needs.build_generic_iso.outputs.generic_image_iso }}
+            ${{ needs.build_generic_iso.outputs.generic_image_iso }}.minisig
 
       - uses: Nats-ji/delete-old-releases@v1.0.1
         with:
